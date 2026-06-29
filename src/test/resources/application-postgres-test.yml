@@ -1,0 +1,24 @@
+# Datasource is NOT configured here — @ServiceConnection on the PostgreSQLContainer
+# bean provides all spring.datasource.* values at context startup.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: none
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: false
+  flyway:
+    enabled: true
+    # Use production migrations (not the H2-compat test-migration)
+    locations: filesystem:src/main/resources/db/migration
+    baseline-on-migrate: false
+
+app:
+  api:
+    # Overridden at runtime by @DynamicPropertySource in PostgresBaseTest
+    credit-bureau-url: http://localhost:9090
+    card-provider-url: http://localhost:9090
+    notification-url: http://localhost:9090
+  outbox:
+    poll-batch-size: 10
+    max-retries: 3
+    poll-delay-ms: 5000

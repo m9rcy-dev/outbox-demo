@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MdcContext.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">outbox-demo</a> &gt; <a href="index.source.html" class="el_package">com.demo.outbox.util</a> &gt; <span class="el_source">MdcContext.java</span></div><h1>MdcContext.java</h1><pre class="source lang-java linenums">package com.demo.outbox.util;
+
+import org.slf4j.MDC;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.Supplier;
+
+/**
+ * AutoCloseable MDC context holder for try-with-resources blocks.
+ *
+ * Removes only the keys it owns on close() — outer MDC context is untouched.
+ * Thread-propagation helpers (wrap) capture a snapshot of the current MDC at
+ * call time and restore it on the target thread.
+ *
+ * Pipeline event usage:
+ * &lt;pre&gt;
+ *   try (MdcContext mdc = MdcContext.forPipelineEvent(correlationId, pipelineType)) {
+ *       mdc.setStep(&quot;CreditBureauCheckStep&quot;);
+ *       // correlationId, pipelineType, and step appear on every log line
+ *   } // all three keys cleared
+ * &lt;/pre&gt;
+ *
+ * HTTP request usage:
+ * &lt;pre&gt;
+ *   try (MdcContext mdc = MdcContext.forHttpRequest(request.getHeader(&quot;X-Request-ID&quot;))) {
+ *       // requestId appears on every log line within this block
+ *   }
+ * &lt;/pre&gt;
+ *
+ * Async propagation usage:
+ * &lt;pre&gt;
+ *   CompletableFuture.runAsync(MdcContext.wrap(() -&gt; { ... }));
+ *   CompletableFuture.supplyAsync(MdcContext.wrap(() -&gt; computeValue()));
+ * &lt;/pre&gt;
+ */
+public final class MdcContext implements AutoCloseable {
+
+    public static final String KEY_CORRELATION_ID = &quot;correlationId&quot;;
+    public static final String KEY_PIPELINE_TYPE  = &quot;pipelineType&quot;;
+    public static final String KEY_STEP           = &quot;step&quot;;
+    public static final String KEY_REQUEST_ID     = &quot;requestId&quot;;
+
+    private final boolean ownsCorrelationId;
+    private final boolean ownsPipelineType;
+    private final boolean ownsStep;
+    private final boolean ownsRequestId;
+
+    private MdcContext(String correlationId, String pipelineType,
+<span class="fc" id="L51">                       String requestId, boolean managesStep) {</span>
+<span class="fc bfc" id="L52" title="All 2 branches covered.">        this.ownsCorrelationId = correlationId != null;</span>
+<span class="fc bfc" id="L53" title="All 2 branches covered.">        this.ownsPipelineType  = pipelineType  != null;</span>
+<span class="fc" id="L54">        this.ownsStep          = managesStep;</span>
+<span class="fc bfc" id="L55" title="All 2 branches covered.">        this.ownsRequestId     = requestId     != null;</span>
+
+<span class="fc bfc" id="L57" title="All 2 branches covered.">        if (ownsCorrelationId) MDC.put(KEY_CORRELATION_ID, correlationId);</span>
+<span class="fc bfc" id="L58" title="All 2 branches covered.">        if (ownsPipelineType)  MDC.put(KEY_PIPELINE_TYPE,  pipelineType);</span>
+<span class="fc bfc" id="L59" title="All 2 branches covered.">        if (ownsRequestId)     MDC.put(KEY_REQUEST_ID,     requestId);</span>
+<span class="fc" id="L60">    }</span>
+
+    /**
+     * For the pipeline poller. Sets correlationId and pipelineType immediately.
+     * Also takes ownership of the step key so close() removes it even though
+     * step is written later via setStep().
+     */
+    public static MdcContext forPipelineEvent(String correlationId, String pipelineType) {
+<span class="fc" id="L68">        return new MdcContext(correlationId, pipelineType, null, true);</span>
+    }
+
+    /**
+     * For the REST controller. Sets requestId.
+     * If rawRequestId is null or blank a UUID is generated with a &quot;gen-&quot; prefix.
+     */
+    public static MdcContext forHttpRequest(String rawRequestId) {
+<span class="fc bfc" id="L76" title="All 4 branches covered.">        String id = (rawRequestId != null &amp;&amp; !rawRequestId.isBlank())</span>
+<span class="fc" id="L77">                ? rawRequestId</span>
+<span class="fc" id="L78">                : &quot;gen-&quot; + UUID.randomUUID();</span>
+<span class="fc" id="L79">        return new MdcContext(null, null, id, false);</span>
+    }
+
+    /**
+     * Updates the step key in MDC as the pipeline advances through steps.
+     * Safe to call multiple times. The key is always removed on close() for
+     * pipeline event contexts.
+     */
+    public void setStep(String stepName) {
+<span class="fc" id="L88">        MDC.put(KEY_STEP, stepName);</span>
+<span class="fc" id="L89">    }</span>
+
+    /**
+     * Wraps a Runnable to propagate the current MDC snapshot to another thread.
+     *
+     * &lt;pre&gt;
+     *   CompletableFuture.runAsync(MdcContext.wrap(() -&gt; { ... }));
+     * &lt;/pre&gt;
+     *
+     * The wrapped Runnable clears MDC entirely on completion so it does not
+     * leak into subsequent tasks on the same pooled thread.
+     */
+    public static Runnable wrap(Runnable runnable) {
+<span class="fc" id="L102">        Map&lt;String, String&gt; snapshot = MDC.getCopyOfContextMap();</span>
+<span class="fc" id="L103">        return () -&gt; {</span>
+<span class="fc bfc" id="L104" title="All 2 branches covered.">            MDC.setContextMap(snapshot != null ? snapshot : Collections.emptyMap());</span>
+            try {
+<span class="fc" id="L106">                runnable.run();</span>
+            } finally {
+<span class="fc" id="L108">                MDC.clear();</span>
+            }
+<span class="fc" id="L110">        };</span>
+    }
+
+    /**
+     * Wraps a Supplier to propagate the current MDC snapshot to another thread.
+     *
+     * &lt;pre&gt;
+     *   CompletableFuture.supplyAsync(MdcContext.wrap(() -&gt; computeValue()));
+     * &lt;/pre&gt;
+     */
+    public static &lt;T&gt; Supplier&lt;T&gt; wrap(Supplier&lt;T&gt; supplier) {
+<span class="fc" id="L121">        Map&lt;String, String&gt; snapshot = MDC.getCopyOfContextMap();</span>
+<span class="fc" id="L122">        return () -&gt; {</span>
+<span class="fc bfc" id="L123" title="All 2 branches covered.">            MDC.setContextMap(snapshot != null ? snapshot : Collections.emptyMap());</span>
+            try {
+<span class="fc" id="L125">                return supplier.get();</span>
+            } finally {
+<span class="fc" id="L127">                MDC.clear();</span>
+            }
+        };
+    }
+
+    @Override
+    public void close() {
+<span class="fc bfc" id="L134" title="All 2 branches covered.">        if (ownsCorrelationId) MDC.remove(KEY_CORRELATION_ID);</span>
+<span class="fc bfc" id="L135" title="All 2 branches covered.">        if (ownsPipelineType)  MDC.remove(KEY_PIPELINE_TYPE);</span>
+<span class="fc bfc" id="L136" title="All 2 branches covered.">        if (ownsStep)          MDC.remove(KEY_STEP);</span>
+<span class="fc bfc" id="L137" title="All 2 branches covered.">        if (ownsRequestId)     MDC.remove(KEY_REQUEST_ID);</span>
+<span class="fc" id="L138">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

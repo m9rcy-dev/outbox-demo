@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5level [%thread] [cid=%X{correlationId:--}] [pipe=%X{pipelineType:--}] [step=%X{step:--}] [rid=%X{requestId:--}] %-50logger{50} : %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <logger name="com.demo.outbox" level="DEBUG"/>
+
+    <springProfile name="test">
+        <logger name="org.hibernate.SQL" level="WARN"/>
+        <logger name="org.springframework" level="WARN"/>
+    </springProfile>
+
+</configuration>

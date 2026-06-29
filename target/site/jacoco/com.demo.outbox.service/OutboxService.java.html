@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>OutboxService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">outbox-demo</a> &gt; <a href="index.source.html" class="el_package">com.demo.outbox.service</a> &gt; <span class="el_source">OutboxService.java</span></div><h1>OutboxService.java</h1><pre class="source lang-java linenums">package com.demo.outbox.service;
+
+import com.demo.outbox.entity.OutboxEvent;
+import com.demo.outbox.pipeline.PipelineRegistry;
+import com.demo.outbox.repository.OutboxEventRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.util.UUID;
+
+/**
+ * Call {@link #saveEvent} INSIDE an existing {@code @Transactional} method.
+ *
+ * The outbox row is committed atomically with your business data — if the
+ * business transaction rolls back, the outbox row rolls back too.
+ */
+@Service
+@RequiredArgsConstructor
+<span class="fc" id="L22">@Slf4j</span>
+public class OutboxService {
+
+    private final OutboxEventRepository outboxEventRepository;
+    private final PipelineRegistry pipelineRegistry;
+    private final ObjectMapper objectMapper;
+
+    /**
+     * Persist a pipeline outbox event.
+     *
+     * @param pipelineType must match a registered pipeline type
+     * @param correlationId business correlation ID (e.g. applicationId cast to UUID)
+     * @param context       the initial pipeline context — serialised to JSON
+     */
+    public OutboxEvent saveEvent(String pipelineType, UUID correlationId, Object context) {
+<span class="fc bfc" id="L37" title="All 2 branches covered.">        if (!pipelineRegistry.hasPipeline(pipelineType)) {</span>
+<span class="fc" id="L38">            throw new IllegalArgumentException(</span>
+                &quot;No pipeline registered for type: &quot; + pipelineType);
+        }
+
+<span class="fc" id="L42">        int totalSteps = pipelineRegistry.getSteps(pipelineType).size();</span>
+
+        try {
+<span class="fc" id="L45">            OutboxEvent event = OutboxEvent.builder()</span>
+<span class="fc" id="L46">                .correlationId(correlationId)</span>
+<span class="fc" id="L47">                .pipelineType(pipelineType)</span>
+<span class="fc" id="L48">                .currentStep(0)</span>
+<span class="fc" id="L49">                .totalSteps(totalSteps)</span>
+<span class="fc" id="L50">                .status(OutboxEvent.Status.PENDING)</span>
+<span class="fc" id="L51">                .payload(objectMapper.writeValueAsString(context))</span>
+<span class="fc" id="L52">                .build();</span>
+
+<span class="fc" id="L54">            OutboxEvent saved = outboxEventRepository.save(event);</span>
+<span class="fc" id="L55">            log.debug(&quot;Outbox event created id={} pipeline={} correlationId={}&quot;,</span>
+<span class="fc" id="L56">                saved.getId(), pipelineType, correlationId);</span>
+<span class="fc" id="L57">            return saved;</span>
+
+<span class="fc" id="L59">        } catch (JsonProcessingException e) {</span>
+<span class="fc" id="L60">            throw new IllegalArgumentException(&quot;Failed to serialize pipeline context&quot;, e);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

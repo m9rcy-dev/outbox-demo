@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CardApplicationController.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">outbox-demo</a> &gt; <a href="index.source.html" class="el_package">com.demo.outbox.api</a> &gt; <span class="el_source">CardApplicationController.java</span></div><h1>CardApplicationController.java</h1><pre class="source lang-java linenums">package com.demo.outbox.api;
+
+import com.demo.outbox.entity.CardApplication;
+import com.demo.outbox.service.CardApplicationService;
+import com.demo.outbox.util.MdcContext;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
+import lombok.Data;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+@RestController
+@RequestMapping(&quot;/api/v1/card-applications&quot;)
+@RequiredArgsConstructor
+<span class="fc" id="L23">@Slf4j</span>
+public class CardApplicationController {
+
+    private final CardApplicationService cardApplicationService;
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public CardApplication submit(@Valid @RequestBody SubmitRequest request,
+                                  HttpServletRequest httpRequest) {
+<span class="fc" id="L32">        try (MdcContext mdc = MdcContext.forHttpRequest(httpRequest.getHeader(&quot;X-Request-ID&quot;))) {</span>
+<span class="fc" id="L33">            log.info(&quot;Submitting card application for applicant={}&quot;, request.getApplicantName());</span>
+<span class="fc" id="L34">            CardApplication result = cardApplicationService.submitApplication(</span>
+<span class="fc" id="L35">                request.getApplicantName(),</span>
+<span class="fc" id="L36">                request.getEmail(),</span>
+<span class="fc" id="L37">                request.getAnnualIncome()</span>
+            );
+<span class="fc" id="L39">            log.info(&quot;Card application submitted, id={}&quot;, result.getId());</span>
+<span class="fc" id="L40">            return result;</span>
+        }
+    }
+
+    @GetMapping(&quot;/{id}&quot;)
+    public CardApplication get(@PathVariable UUID id, HttpServletRequest httpRequest) {
+<span class="fc" id="L46">        try (MdcContext mdc = MdcContext.forHttpRequest(httpRequest.getHeader(&quot;X-Request-ID&quot;))) {</span>
+<span class="fc" id="L47">            log.info(&quot;Fetching card application id={}&quot;, id);</span>
+<span class="fc" id="L48">            return cardApplicationService.getApplication(id);</span>
+        }
+    }
+
+    @Data
+    public static class SubmitRequest {
+        @NotBlank
+        private String applicantName;
+
+        @Email @NotBlank
+        private String email;
+
+        @Positive
+        private BigDecimal annualIncome;
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

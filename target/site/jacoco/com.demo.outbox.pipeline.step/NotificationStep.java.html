@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>NotificationStep.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">outbox-demo</a> &gt; <a href="index.source.html" class="el_package">com.demo.outbox.pipeline.step</a> &gt; <span class="el_source">NotificationStep.java</span></div><h1>NotificationStep.java</h1><pre class="source lang-java linenums">package com.demo.outbox.pipeline.step;
+
+import com.demo.outbox.api.NotificationClient;
+import com.demo.outbox.entity.CardApplication;
+import com.demo.outbox.pipeline.PipelineStep;
+import com.demo.outbox.pipeline.context.CardApplicationContext;
+import com.demo.outbox.repository.CardApplicationRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+/**
+ * Step 2 — Sends an approval notification to the applicant.
+ *
+ * Input:  email, applicantName, providerRef (from context)
+ * Output: notificationId (set on context for step 3 to use)
+ * Side effect: updates CardApplication.status → NOTIFIED
+ */
+@Component
+@RequiredArgsConstructor
+<span class="fc" id="L21">@Slf4j</span>
+public class NotificationStep implements PipelineStep&lt;CardApplicationContext&gt; {
+
+    private final NotificationClient notificationClient;
+    private final CardApplicationRepository cardApplicationRepository;
+
+    @Override
+<span class="fc" id="L28">    public String getPipelineType() { return CreditBureauCheckStep.PIPELINE_TYPE; }</span>
+
+    @Override
+<span class="fc" id="L31">    public int getStepIndex() { return 2; }</span>
+
+    @Override
+    public Class&lt;CardApplicationContext&gt; getContextClass() {
+<span class="fc" id="L35">        return CardApplicationContext.class;</span>
+    }
+
+    @Override
+    public boolean execute(CardApplicationContext ctx) throws Exception {
+<span class="fc" id="L40">        log.info(&quot;[Step 2] Sending notification to email={}&quot;, ctx.getEmail());</span>
+
+<span class="fc" id="L42">        String notifId = notificationClient.sendApprovalNotification(</span>
+<span class="fc" id="L43">            ctx.getEmail(),</span>
+<span class="fc" id="L44">            ctx.getApplicantName(),</span>
+<span class="fc" id="L45">            ctx.getProviderRef()</span>
+        );
+<span class="fc" id="L47">        ctx.setNotificationId(notifId);</span>
+
+<span class="fc" id="L49">        CardApplication app = cardApplicationRepository.findById(ctx.getApplicationId())</span>
+<span class="fc" id="L50">                .orElseThrow(() -&gt; new IllegalStateException(</span>
+<span class="fc" id="L51">                        &quot;CardApplication not found: &quot; + ctx.getApplicationId()));</span>
+<span class="fc" id="L52">        app.setNotificationId(notifId);</span>
+<span class="fc" id="L53">        app.setStatus(CardApplication.Status.NOTIFIED);</span>
+<span class="fc" id="L54">        cardApplicationRepository.save(app);</span>
+
+<span class="fc" id="L56">        log.info(&quot;[Step 2] Notification sent, id={}&quot;, notifId);</span>
+<span class="fc" id="L57">        return true;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

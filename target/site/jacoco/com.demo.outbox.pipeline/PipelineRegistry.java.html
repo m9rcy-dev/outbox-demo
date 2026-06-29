@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PipelineRegistry.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">outbox-demo</a> &gt; <a href="index.source.html" class="el_package">com.demo.outbox.pipeline</a> &gt; <span class="el_source">PipelineRegistry.java</span></div><h1>PipelineRegistry.java</h1><pre class="source lang-java linenums">package com.demo.outbox.pipeline;
+
+import jakarta.annotation.PostConstruct;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+/**
+ * Discovers all {@link PipelineStep} beans at startup and organises them
+ * by pipeline type in step-index order.
+ *
+ * Adding a new pipeline = register new step beans. Zero changes here.
+ */
+@Service
+<span class="fc" id="L19">@Slf4j</span>
+public class PipelineRegistry {
+
+    private final Map&lt;String, List&lt;PipelineStep&lt;?&gt;&gt;&gt; pipelines;
+
+<span class="fc" id="L24">    public PipelineRegistry(List&lt;PipelineStep&lt;?&gt;&gt; allSteps) {</span>
+<span class="fc" id="L25">        this.pipelines = allSteps.stream()</span>
+<span class="fc" id="L26">            .collect(Collectors.groupingBy(</span>
+                PipelineStep::getPipelineType,
+<span class="fc" id="L28">                Collectors.collectingAndThen(</span>
+<span class="fc" id="L29">                    Collectors.toList(),</span>
+<span class="fc" id="L30">                    steps -&gt; steps.stream()</span>
+<span class="fc" id="L31">                        .sorted(Comparator.comparingInt(PipelineStep::getStepIndex))</span>
+<span class="fc" id="L32">                        .collect(Collectors.toList())</span>
+                )
+            ));
+<span class="fc" id="L35">    }</span>
+
+    @PostConstruct
+    public void logRegisteredPipelines() {
+<span class="fc" id="L39">        pipelines.forEach((type, steps) -&gt; {</span>
+<span class="fc bfc" id="L40" title="All 2 branches covered.">            if (steps.size() == 1) {</span>
+<span class="fc" id="L41">                log.warn(&quot;Pipeline [{}] has only 1 step ({}) — checkpoint is redundant but functional&quot;,</span>
+<span class="fc" id="L42">                    type, steps.get(0).getClass().getSimpleName());</span>
+            } else {
+<span class="fc" id="L44">                log.info(&quot;Pipeline registered: [{}] with {} steps: {}&quot;,</span>
+                    type,
+<span class="fc" id="L46">                    steps.size(),</span>
+<span class="fc" id="L47">                    steps.stream()</span>
+<span class="fc" id="L48">                        .map(s -&gt; s.getStepIndex() + &quot;:&quot; + s.getClass().getSimpleName())</span>
+<span class="fc" id="L49">                        .collect(Collectors.joining(&quot;, &quot;))</span>
+                );
+            }
+<span class="fc" id="L52">        });</span>
+<span class="fc" id="L53">    }</span>
+
+    public List&lt;PipelineStep&lt;?&gt;&gt; getSteps(String pipelineType) {
+<span class="fc" id="L56">        return pipelines.getOrDefault(pipelineType, List.of());</span>
+    }
+
+    public boolean hasPipeline(String pipelineType) {
+<span class="fc" id="L60">        return pipelines.containsKey(pipelineType);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

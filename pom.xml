@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.2.0</version>
+    </parent>
+
+    <groupId>com.demo</groupId>
+    <artifactId>outbox-demo</artifactId>
+    <version>1.0.0</version>
+
+    <properties>
+        <java.version>17</java.version>
+        <!-- Override Spring Boot 3.2's 1.19.3 — fixes Docker Desktop 27+/29.x compatibility -->
+        <testcontainers.version>1.21.4</testcontainers.version>
+    </properties>
+
+    <dependencies>
+        <!-- Web -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- JPA -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!-- Postgres (runtime) -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- H2 for tests -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Flyway for migrations -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+
+        <!-- Jackson -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Validation -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Test -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- WireMock for API stubbing -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <version>3.3.1</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Testcontainers: Spring Boot @ServiceConnection auto-wires datasource from container -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Testcontainers: JUnit 5 @Container lifecycle extension -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Testcontainers: PostgreSQL module -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.11</version>
+                <configuration>
+                    <excludes>
+                        <exclude>com/demo/outbox/OutboxDemoApplication.class</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals><goal>prepare-agent</goal></goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals><goal>report</goal></goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Pass DOCKER_API_VERSION so docker-java negotiates correctly with
+                 Docker Desktop 4.36+/Engine 27+, which require minimum API 1.44 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <includes>
+                        <include>**/*Test.java</include>
+                        <include>**/*Tests.java</include>
+                        <include>**/*IT.java</include>
+                    </includes>
+                    <environmentVariables>
+                        <!-- Required for Docker Desktop 4.36+/Engine 27+ (minimum API 1.44) -->
+                        <DOCKER_API_VERSION>1.44</DOCKER_API_VERSION>
+                        <!-- Ryuk can't bind-mount docker.raw.sock inside Docker Desktop's VM -->
+                        <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+                    </environmentVariables>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

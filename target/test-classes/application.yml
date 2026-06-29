@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: none
+    database-platform: org.hibernate.dialect.H2Dialect
+    show-sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/test-migration
+    baseline-on-migrate: true
+
+app:
+  api:
+    credit-bureau-url: http://localhost:${wiremock.port:9090}
+    card-provider-url: http://localhost:${wiremock.port:9090}
+    notification-url: http://localhost:${wiremock.port:9090}
+  outbox:
+    poll-batch-size: 10
+    max-retries: 3
+    poll-delay-ms: 5000

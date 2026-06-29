@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CardApplicationService.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">outbox-demo</a> &gt; <a href="index.source.html" class="el_package">com.demo.outbox.service</a> &gt; <span class="el_source">CardApplicationService.java</span></div><h1>CardApplicationService.java</h1><pre class="source lang-java linenums">package com.demo.outbox.service;
+
+import com.demo.outbox.entity.CardApplication;
+import com.demo.outbox.pipeline.context.CardApplicationContext;
+import com.demo.outbox.pipeline.step.CreditBureauCheckStep;
+import com.demo.outbox.repository.CardApplicationRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+/**
+ * Demonstrates the Outbox Pattern in action.
+ *
+ * {@code submitApplication} saves the business record AND the outbox event
+ * in one atomic transaction. No external API call happens here — that is
+ * deferred to the pipeline poller.
+ */
+@Service
+@RequiredArgsConstructor
+<span class="fc" id="L24">@Slf4j</span>
+public class CardApplicationService {
+
+    private final CardApplicationRepository cardApplicationRepository;
+    private final OutboxService outboxService;
+
+    /**
+     * Atomically:
+     *  1. Persists a new CardApplication (status=SUBMITTED)
+     *  2. Creates an OutboxEvent that drives the 4-step pipeline
+     *
+     * Returns immediately — pipeline runs asynchronously via the poller.
+     */
+    @Transactional
+    public CardApplication submitApplication(String applicantName,
+                                             String email,
+                                             BigDecimal annualIncome) {
+        // Step A: save business entity
+<span class="fc" id="L42">        CardApplication application = CardApplication.builder()</span>
+<span class="fc" id="L43">            .applicantName(applicantName)</span>
+<span class="fc" id="L44">            .email(email)</span>
+<span class="fc" id="L45">            .annualIncome(annualIncome)</span>
+<span class="fc" id="L46">            .status(CardApplication.Status.SUBMITTED)</span>
+<span class="fc" id="L47">            .build();</span>
+<span class="fc" id="L48">        application = cardApplicationRepository.save(application);</span>
+
+        // Step B: save outbox event — atomic with the above save
+<span class="fc" id="L51">        CardApplicationContext context = CardApplicationContext.builder()</span>
+<span class="fc" id="L52">            .applicationId(application.getId())</span>
+<span class="fc" id="L53">            .applicantName(applicantName)</span>
+<span class="fc" id="L54">            .email(email)</span>
+<span class="fc" id="L55">            .annualIncome(annualIncome)</span>
+<span class="fc" id="L56">            .build();</span>
+
+<span class="fc" id="L58">        outboxService.saveEvent(</span>
+            CreditBureauCheckStep.PIPELINE_TYPE,
+<span class="fc" id="L60">            application.getId(),</span>
+            context
+        );
+
+<span class="fc" id="L64">        log.info(&quot;Application {} submitted for {}, pipeline queued&quot;, application.getId(), email);</span>
+<span class="fc" id="L65">        return application;</span>
+    }
+
+    /**
+     * Simple status check — no join to outbox needed because status is
+     * mirrored progressively onto the entity by each pipeline step.
+     */
+    @Transactional(readOnly = true)
+    public CardApplication getApplication(UUID id) {
+<span class="fc" id="L74">        return cardApplicationRepository.findById(id)</span>
+<span class="fc" id="L75">            .orElseThrow(() -&gt; new IllegalArgumentException(&quot;Application not found: &quot; + id));</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>
