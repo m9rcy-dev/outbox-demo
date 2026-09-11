@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: com.demo.outbox.CardApplicationIntegrationTest
--------------------------------------------------------------------------------
-Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.725 s -- in com.demo.outbox.CardApplicationIntegrationTest

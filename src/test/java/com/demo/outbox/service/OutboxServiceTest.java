@@ -6,14 +6,14 @@ import com.demo.outbox.pipeline.PipelineStep;
 import com.demo.outbox.pipeline.context.CardApplicationContext;
 import com.demo.outbox.pipeline.step.CreditBureauCheckStep;
 import com.demo.outbox.repository.OutboxEventRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -84,11 +84,11 @@ class OutboxServiceTest {
     }
 
     @Test
-    @DisplayName("saveEvent wraps JsonProcessingException in IllegalArgumentException")
+    @DisplayName("saveEvent wraps JacksonException in IllegalArgumentException")
     void saveEvent_wrapsSerializationException() throws Exception {
         ObjectMapper brokenMapper = mock(ObjectMapper.class);
         when(brokenMapper.writeValueAsString(any()))
-            .thenThrow(new JsonProcessingException("broken") {});
+            .thenThrow(new JacksonException("broken") {});
 
         var field = OutboxService.class.getDeclaredField("objectMapper");
         field.setAccessible(true);

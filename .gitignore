@@ -1,0 +1,8 @@
+target/
+*.class
+
+# Logs
+*.log
+
+# OS
+.DS_Store

@@ -1,6 +1,7 @@
 package com.demo.outbox.pipeline.step.token;
 
 import com.demo.outbox.pipeline.PipelineStep;
+import com.demo.outbox.pipeline.StepMode;
 import com.demo.outbox.pipeline.context.TokenUpdateContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +16,11 @@ import org.springframework.stereotype.Component;
  * The Mastercard client MUST pass a deterministic idempotency key so that
  * a retry (after a checkpoint failure) returns the same response without
  * re-executing the update on Mastercard's side.
+ *
+ * BLOCKING_SELF_RETRIED: the Mastercard integration client already retries
+ * transient failures internally, so by the time an exception reaches this
+ * step its own attempts are exhausted — the pipeline only needs one more
+ * checkpoint-level retry on top, not the pipeline-wide default.
  */
 @Component
 @RequiredArgsConstructor
@@ -36,16 +42,24 @@ public class MastercardTokenUpdateStep implements PipelineStep<TokenUpdateContex
     public Class<TokenUpdateContext> getContextClass() { return TokenUpdateContext.class; }
 
     @Override
+    public StepMode getMode() { return StepMode.BLOCKING_SELF_RETRIED; }
+
+    @Override
+    public int getMaxRetries() { return 1; }
+
+    @Override
     public boolean execute(TokenUpdateContext ctx) throws Exception {
         log.info("[Step 0] Updating Mastercard token={} to status={}", ctx.getTokenId(), ctx.getDesiredStatus());
 
-        // Idempotency key: stable across retries for this specific saga step
-        // String idempotencyKey = outboxEventId + ":step0";  // pass via ctx or inject
+        // Deterministic across every retry of this same outbox event — Mastercard
+        // dedupes on this key instead of applying the status change twice.
+        String idempotencyKey = ctx.getCardId() + ":" + ctx.getTokenId() + ":" + ctx.getDesiredStatus();
+
         // MastercardTokenResponse response = mastercardClient.updateTokenStatus(
         //     ctx.getTokenId(), ctx.getDesiredStatus(), idempotencyKey);
 
         // TODO: replace with real MastercardClient call
-        String mastercardRef = "MC-REF-" + ctx.getTokenId();
+        String mastercardRef = "MC-REF-" + idempotencyKey;
         ctx.setMastercardRef(mastercardRef);
         ctx.setUpdatedStatus(ctx.getDesiredStatus());
 

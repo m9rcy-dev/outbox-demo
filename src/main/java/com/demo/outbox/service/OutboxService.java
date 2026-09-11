@@ -3,11 +3,11 @@ package com.demo.outbox.service;
 import com.demo.outbox.entity.OutboxEvent;
 import com.demo.outbox.pipeline.PipelineRegistry;
 import com.demo.outbox.repository.OutboxEventRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.UUID;
 
@@ -56,7 +56,7 @@ public class OutboxService {
                 saved.getId(), pipelineType, correlationId);
             return saved;
 
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalArgumentException("Failed to serialize pipeline context", e);
         }
     }

@@ -3,14 +3,16 @@ package com.demo.outbox.scheduler;
 import com.demo.outbox.config.AppConfig;
 import com.demo.outbox.entity.OutboxEvent;
 import com.demo.outbox.pipeline.PipelineStep;
+import com.demo.outbox.pipeline.StepMode;
 import com.demo.outbox.repository.OutboxEventRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -67,22 +69,21 @@ public class OutboxStepExecutor {
             return true;
         }
 
+        Object context = null;
         try {
-            Object context = objectMapper.readValue(event.getPayload(), step.getContextClass());
-            boolean continueExecution = step.execute(context);
+            context = objectMapper.readValue(event.getPayload(), step.getContextClass());
 
-            boolean isLast = (stepIndex == totalSteps - 1) || !continueExecution;
-            event.setCurrentStep(stepIndex + 1);
-            event.setPayload(objectMapper.writeValueAsString(context));
-            if (isLast) {
-                event.setStatus(OutboxEvent.Status.PROCESSED);
-                event.setProcessedAt(LocalDateTime.now());
+            if (!step.appliesTo(context)) {
+                log.debug("Pipeline [{}] step {} ({}) does not apply to this context — skipping",
+                    event.getPipelineType(), stepIndex, step.getClass().getSimpleName());
+                return advanceCheckpoint(event, stepIndex, totalSteps, context, true);
             }
-            // saveAndFlush forces the version-check UPDATE immediately so
-            // OptimisticLockingFailureException is thrown here (inside the try/catch)
-            // rather than at commit time (outside it).
-            outboxEventRepository.saveAndFlush(event);
-            return continueExecution;
+
+            boolean continueExecution = step.execute(context);
+            // saveAndFlush (inside advanceCheckpoint) forces the version-check UPDATE
+            // immediately so OptimisticLockingFailureException is thrown here (inside
+            // the try/catch) rather than at commit time (outside it).
+            return advanceCheckpoint(event, stepIndex, totalSteps, context, continueExecution);
 
         } catch (OptimisticLockingFailureException e) {
             // Re-throw so the REQUIRES_NEW TX rolls back cleanly.
@@ -90,7 +91,10 @@ public class OutboxStepExecutor {
             log.debug("Event {} concurrent update at step {} — another pod owns it", eventId, stepIndex);
             throw e;
         } catch (Exception e) {
-            return handleStepFailure(event, stepIndex, e);
+            if (step.getMode() == StepMode.FIRE_AND_FORGET && context != null) {
+                return handleFireAndForgetFailure(event, step, stepIndex, totalSteps, context, e);
+            }
+            return handleStepFailure(event, step, stepIndex, e);
         }
     }
 
@@ -104,9 +108,52 @@ public class OutboxStepExecutor {
         log.error("Event {} permanently failed: {}", eventId, reason);
     }
 
-    private boolean handleStepFailure(OutboxEvent event, int stepIndex, Exception e) {
+    /**
+     * FIRE_AND_FORGET steps never block the pipeline or consume retryCount:
+     * the failure is logged and the checkpoint advances exactly as if the
+     * step had succeeded (context is re-serialised unchanged since the
+     * step never got to mutate it).
+     */
+    @SuppressWarnings("rawtypes")
+    private boolean handleFireAndForgetFailure(OutboxEvent event, PipelineStep step, int stepIndex,
+                                                int totalSteps, Object context, Exception e) {
+        log.warn("Pipeline [{}] step {} ({}) failed but is FIRE_AND_FORGET — continuing: {}",
+            event.getPipelineType(), stepIndex, step.getClass().getSimpleName(), e.getMessage());
+
+        event.setLastError("Step " + stepIndex + " (fire-and-forget, ignored): " + e.getMessage());
+        try {
+            return advanceCheckpoint(event, stepIndex, totalSteps, context, true);
+        } catch (JacksonException je) {
+            // Re-serialising a context that was already valid JSON on the way in
+            // should never fail — if it does, don't silently swallow it.
+            return handleStepFailure(event, step, stepIndex, je);
+        }
+    }
+
+    /**
+     * Shared checkpoint write used by a normal successful step, a skipped
+     * (appliesTo() == false) step, and a swallowed FIRE_AND_FORGET failure —
+     * all three advance the pipeline identically. saveAndFlush forces the
+     * version-check UPDATE to run immediately so a concurrent-update
+     * conflict surfaces here, inside the caller's try/catch.
+     */
+    private boolean advanceCheckpoint(OutboxEvent event, int stepIndex, int totalSteps,
+                                       Object context, boolean continueExecution) {
+        boolean isLast = (stepIndex == totalSteps - 1) || !continueExecution;
+        event.setCurrentStep(stepIndex + 1);
+        event.setPayload(objectMapper.writeValueAsString(context));
+        if (isLast) {
+            event.setStatus(OutboxEvent.Status.PROCESSED);
+            event.setProcessedAt(LocalDateTime.now());
+        }
+        outboxEventRepository.saveAndFlush(event);
+        return continueExecution;
+    }
+
+    @SuppressWarnings("rawtypes")
+    private boolean handleStepFailure(OutboxEvent event, PipelineStep step, int stepIndex, Exception e) {
         int newRetryCount = event.getRetryCount() + 1;
-        int maxRetries = properties.getOutbox().getMaxRetries();
+        int maxRetries = effectiveMaxRetries(step);
 
         log.warn("Pipeline [{}] step {} failed (attempt {}/{}): {}",
             event.getPipelineType(), stepIndex, newRetryCount, maxRetries, e.getMessage());
@@ -121,5 +168,16 @@ public class OutboxStepExecutor {
         }
         outboxEventRepository.save(event);
         return false;
+    }
+
+    /**
+     * A step's own {@link PipelineStep#getMaxRetries()} override wins when positive
+     * (e.g. BLOCKING_SELF_RETRIED steps whose client already retries internally);
+     * otherwise falls back to the pipeline-wide {@code app.outbox.max-retries}.
+     */
+    @SuppressWarnings("rawtypes")
+    private int effectiveMaxRetries(PipelineStep step) {
+        int override = step.getMaxRetries();
+        return override > 0 ? override : properties.getOutbox().getMaxRetries();
     }
 }

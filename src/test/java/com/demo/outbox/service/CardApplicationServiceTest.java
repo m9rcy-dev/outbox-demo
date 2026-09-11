@@ -6,7 +6,6 @@ import com.demo.outbox.pipeline.context.CardApplicationContext;
 import com.demo.outbox.pipeline.step.CreditBureauCheckStep;
 import com.demo.outbox.repository.CardApplicationRepository;
 import com.demo.outbox.repository.OutboxEventRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

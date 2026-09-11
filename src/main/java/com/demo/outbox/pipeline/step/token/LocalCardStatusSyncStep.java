@@ -15,6 +15,13 @@ import org.springframework.stereotype.Component;
  * This step and its checkpoint commit in the same REQUIRES_NEW transaction
  * (via OutboxStepExecutor), so the local status and the saga progress are
  * always in sync — either both persist or both roll back.
+ *
+ * BLOCKING_REQUIRED (the default — no override needed): this is a plain
+ * internal DB write with no external dependency, so it should keep retrying
+ * against the pipeline-wide max-retries until it succeeds rather than being
+ * given a short leash. Letting this step dead-letter early is worse than a
+ * few extra retries — it would leave Mastercard's status permanently out of
+ * sync with the local record with no automatic recovery.
  */
 @Component
 @RequiredArgsConstructor
