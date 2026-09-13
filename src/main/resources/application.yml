@@ -20,6 +20,18 @@ app:
     poll-batch-size: 10
     max-retries: 3
     poll-delay-ms: 5000
+  sftp:
+    enabled: false
+    host: localhost
+    port: 22
+    username: sftp-user
+    password: changeme
+    remote-directory: /inbound
+    archive-directory: /archive
+    error-directory: /error
+    local-directory: /tmp/outbox-demo/sftp-inbound
+    filename-pattern: "*.csv"
+    poll-delay-ms: 5000
 
 logging:
   level:
