@@ -50,6 +50,42 @@ The Transactional Outbox pattern eliminates the dual-write hazard by:
 
 The guarantee: **either the business record and the outbox event both exist, or neither does.**
 
+### At a glance: the saga in one diagram
+
+Everything below in this doc is a deep dive on one of these steps. If you only read one diagram, read this one:
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant API as Controller/Service
+    participant DB as Database
+    participant Poller as Outbox Poller
+    participant Ext as External API/Service
+
+    Client->>API: POST request
+    Note over API,DB: one atomic transaction
+    API->>DB: INSERT business row +<br/>INSERT outbox_event (PENDING, currentStep=0)
+    API-->>Client: 202 Accepted — no external call made yet
+
+    loop every poll-delay-ms, on any pod
+        Poller->>DB: SELECT ... WHERE status='PENDING'<br/>FOR UPDATE SKIP LOCKED
+        DB-->>Poller: pending event(s)
+
+        loop each step from currentStep to totalSteps
+            Poller->>Ext: call this step's external API
+            Ext-->>Poller: response
+            Note over Poller,DB: REQUIRES_NEW transaction, own connection pool
+            Poller->>DB: UPDATE outbox_event SET<br/>currentStep+=1, payload=..., version+=1
+        end
+
+        Poller->>DB: UPDATE outbox_event SET status='PROCESSED'
+    end
+
+    Note over Poller,DB: A step failure leaves currentStep unchanged and bumps retryCount —<br/>the next poll resumes from currentStep, never replaying completed steps.
+```
+
+Two things this diagram is deliberately simplifying — the rest of the doc covers them in full: checkpoint/retry mechanics are §6–§8, and "any pod" safety (`SKIP LOCKED` + `@Version`) is proven under real concurrent pods in the test suite, not just asserted here.
+
 ---
 
 ## 3. Architecture Overview
